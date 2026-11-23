@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LLM Pipeline Explorer</title>
+<style>
+:root{--bg:#fff;--fg:#1d2433;--mut:#5b6475;--card:#fff;--line:#e4e7ee;--soft:#f6f8fc;--b:#1e63e9;--r:#e53935;--y:#f2a900;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12151c;--fg:#eef1f7;--mut:#9aa3b5;--card:#1a1e28;--line:#2c3242;--soft:#212633;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12151c;--fg:#eef1f7;--mut:#9aa3b5;--card:#1a1e28;--line:#2c3242;--soft:#212633;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+main{max-width:780px;margin:0 auto;padding:28px 16px 48px}
+h1{text-align:center;font-size:clamp(26px,5vw,38px);margin:8px 0 4px;letter-spacing:-.5px}
+h1 .b{color:var(--b)}h1 .r{color:var(--r)}h1 .y{color:var(--y)}
+.sub{text-align:center;color:var(--mut);margin:0 0 24px}
+.card{background:var(--card);border:1px solid var(--line);border-top:5px solid var(--b);border-radius:14px;padding:18px;margin-bottom:18px}
+.card.c2{border-top-color:var(--r)}.card.c3{border-top-color:var(--y)}
+h2{font-size:18px;margin:0 0 10px;display:flex;align-items:center;gap:10px}
+h2 span{width:28px;height:28px;border-radius:50%;background:var(--b);color:#fff;display:inline-grid;place-items:center;font-size:14px}
+.c2 h2 span{background:var(--r)}.c3 h2 span{background:var(--y);color:#222}
+label{font-size:13px;color:var(--mut);display:block;margin:10px 0 4px}
+textarea,input[type=text],input[type=number]{width:100%;border:1px solid var(--line);background:var(--soft);color:var(--fg);border-radius:10px;padding:10px;font:inherit}
+textarea{min-height:90px;resize:vertical}
+input[type=number]{width:80px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:10px 18px;cursor:pointer;color:#fff;background:var(--b)}
+button:hover{filter:brightness(1.08)}
+.c2 button.go{background:var(--r)}.c3 button.go{background:var(--y);color:#222}
+button.ghost{background:var(--soft);color:var(--fg);border:1px solid var(--line);font-weight:500;padding:8px 14px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.stat{background:var(--soft);border-radius:10px;padding:10px;text-align:center}
+.stat b{display:block;font-size:22px}.stat small{color:var(--mut)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{border-radius:8px;padding:4px 9px;font-family:ui-monospace,Menlo,monospace;font-size:14px;border:2px solid;display:inline-flex;gap:6px;align-items:baseline}
+.chip i{font-style:normal;font-size:11px;opacity:.7}
+.chip.word{border-color:var(--b);background:color-mix(in srgb,var(--b) 12%,transparent)}
+.chip.piece{border-color:var(--y);background:color-mix(in srgb,var(--y) 18%,transparent)}
+.chip.unk{border-color:var(--r);background:color-mix(in srgb,var(--r) 14%,transparent)}
+.note{color:var(--mut);font-size:13px;margin-top:8px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{background:var(--soft);color:var(--fg);border-radius:0;font-weight:500;padding:8px 14px}
+.seg button.on{background:var(--y);color:#222;font-weight:700}
+.opts{display:grid;gap:10px;margin-top:12px}
+.opts div.o{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.opts .o>span{min-width:110px;font-size:13px;color:var(--mut)}
+#stage{height:380px;min-height:240px;resize:vertical;overflow:hidden;border-radius:12px;background:#fffdf5;border:1px solid var(--line);margin-top:12px;touch-action:none;cursor:grab}
+#stage canvas{display:block;width:100%;height:100%}
+</style></head>
+<body><main>
+<h1><span class="b">LLM</span> <span class="r">Pipeline</span> <span class="y">Explorer</span></h1>
+<p class="sub">See how text becomes tokens, then numbers, then points in space.</p>
+
+<section class="card">
+<h2><span>1</span>Build a vocabulary</h2>
+<label for="ctx">Training context (paste any text)</label>
+<textarea id="ctx" placeholder="Paste text the tokeniser should learn from…"></textarea>
+<div class="row">
+<button id="bBuild">Build Vocabulary</button>
+<button class="ghost" id="bEx">Use example text</button>
+<button class="ghost" id="bReset">Reset</button>
+<span class="note" style="margin:0">Keep words seen at least <input type="number" id="min" value="1" min="1" max="20"> time(s)</span>
+</div>
+<div class="stats" id="stats" hidden>
+<div class="stat"><b id="sK">0</b><small>Words kept</small></div>
+<div class="stat"><b id="sV">0</b><small>Vocabulary size</small></div>
+<div class="stat"><b id="sT">0</b><small id="sTs">Tokens (incl. UNK)</small></div>
+</div>
+<div class="note" id="vnote"></div>
+</section>
+
+<section class="card c2">
+<h2><span>2</span>Tokenise a sentence</h2>
+<label for="sent">Encode a sentence</label>
+<input type="text" id="sent" placeholder="Try a word the vocabulary has never seen…">
+<div class="row"><button class="go" id="bTok">Tokenise</button></div>
+<div class="chips" id="chips"></div>
+<div class="note" id="tnote">Blue = whole word in vocabulary · Yellow = word split into pieces · Red = UNK (unknown).</div>
+</section>
+
+<section class="card c3">
+<h2><span>3</span>Embed and plot</h2>
+<label for="ectx">Context to embed</label>
+<textarea id="ectx" placeholder="Paste the sentences whose words you want to see in 3D…"></textarea>
+<div class="opts">
+<div class="o"><span>Vector type</span><div class="seg" id="gType"><button data-v="static" class="on">Static</button><button data-v="ctx">Contextual</button></div></div>
+<div class="o"><span>Based on</span><div class="seg" id="gBase"><button data-v="spell" class="on">Spelling-based</button><button data-v="mean">Meaning-based</button></div></div>
+<div class="o" id="mRow" hidden><span>Meaning method</span><div class="seg" id="gMeth"><button data-v="learn" class="on">Learned from text</button><button data-v="quick">Quick approximation</button></div></div>
+</div>
+<div class="note" id="explain"></div>
+<div class="row"><button class="go" id="bEmb">Embed and Plot</button></div>
+<div id="stage"></div>
+<div class="note" id="pnote">Drag to rotate · scroll to zoom · drag the bottom-right corner to resize.</div>
+</section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const EX="the cat sat on the mat. the dog sat on the rug. a cat and a dog are friends. the king rules the kingdom and the queen rules the castle. the king and the queen love the kingdom. cats chase mice and dogs chase cats.";
+const tok=t=>t.toLowerCase().replace(/’/g,"'").match(/[a-z0-9']+|[^\sa-z0-9']/g)||[];
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let V=null;
+
+/* ---------- Step 1: vocabulary with BPE-style pieces ---------- */
+function build(){
+  const toks=tok($('ctx').value);
+  if(!toks.length){$('vnote').textContent="Please paste some text first.";return}
+  const min=Math.max(1,+$('min').value||1),cnt={};
+  toks.forEach(w=>cnt[w]=(cnt[w]||0)+1);
+  const kept=Object.keys(cnt).filter(w=>cnt[w]>=min);
+  let seqs=Object.keys(cnt).map(w=>({s:[...w],n:cnt[w]})),merges=[];
+  for(let i=0;i<40;i++){
+    const pc={};
+    seqs.forEach(q=>{for(let j=0;j<q.s.length-1;j++){const k=q.s[j]+'\u0001'+q.s[j+1];pc[k]=(pc[k]||0)+q.n}});
+    let best=null,bn=1;for(const k in pc)if(pc[k]>bn){bn=pc[k];best=k}
+    if(!best)break;
+    const [a,b]=best.split('\u0001');merges.push(a+b);
+    seqs.forEach(q=>{const o=[];for(let j=0;j<q.s.length;j++){if(q.s[j]===a&&q.s[j+1]===b){o.push(a+b);j++}else o.push(q.s[j])}q.s=o});
+  }
+  const chars=[...new Set(Object.keys(cnt).join('').split(''))];
+  const pieces=new Set([...chars,...merges]),keptSet=new Set(kept);
+  const list=[...new Set(['[UNK]',...chars,...merges,...kept])];
+  const id={};list.forEach((t,i)=>id[t]=i);
+  V={keptSet,pieces,id,list};
+  let total=0,unk=0;
+  toks.forEach(w=>encode(w).forEach(t=>{total++;if(t.k==='unk')unk++}));
+  $('stats').hidden=false;
+  $('sK').textContent=kept.length;$('sV').textContent=list.length;$('sT').textContent=total;
+  $('sTs').textContent="Tokens (incl. "+unk+" UNK)";
+  $('vnote').textContent=Object.keys(cnt).length-kept.length+" rare word(s) will be split into pieces. "+merges.length+" learned pieces in the vocabulary.";
+}
+function encode(w){
+  if(V.keptSet.has(w))return[{t:w,k:'word'}];
+  const out=[];let i=0;
+  while(i<w.length){
+    let f=false;
+    for(let j=w.length;j>i;j--){const s=w.slice(i,j);if(V.pieces.has(s)){out.push({t:(i?'##':'')+s,k:'piece',raw:s});i=j;f=true;break}}
+    if(!f){out.push({t:'[UNK]',k:'unk'});i++}
+  }
+  if(out.every(x=>x.k==='unk'))return[{t:'[UNK]',k:'unk'}];
+  return out;
+}
+function tokenise(){
+  if(!V){$('tnote').textContent="Build the vocabulary in step 1 first.";return}
+  const ws=tok($('sent').value);
+  if(!ws.length){$('tnote').textContent="Type a sentence first.";return}
+  let n=0,h='';
+  ws.forEach(w=>encode(w).forEach(t=>{n++;const i=V.id[t.k==='piece'?t.raw:t.t];h+='<span class="chip '+t.k+'">'+esc(t.t)+'<i>#'+(i===undefined?0:i)+'</i></span>'}));
+  $('chips').innerHTML=h;
+  $('tnote').textContent=ws.length+" word(s) became "+n+" token(s). Blue = whole word · Yellow = pieces · Red = UNK.";
+}
+
+/* ---------- Step 3: embeddings ---------- */
+const D=32;
+function rng(s){s>>>=0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+function hash(str){let h=2166136261;for(const c of str){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+const rv=s=>{const r=rng(hash(s));return Array.from({length:D},()=>r()*2-1)};
+const add=(a,b,k=1)=>{for(let i=0;i<D;i++)a[i]+=b[i]*k;return a};
+const norm=v=>{const n=Math.hypot(...v)||1;return v.map(x=>x/n)};
+const isW=w=>/[a-z0-9]/.test(w);
+
+function spellVec(w){
+  const s="<"+w+">",v=Array(D).fill(0);
+  for(let n=2;n<=4;n++)for(let i=0;i+n<=s.length;i++)add(v,rv(s.slice(i,i+n)));
+  return norm(v);
+}
+function neighbours(toks,i,k=2){const o=[];for(let j=Math.max(0,i-k);j<=Math.min(toks.length-1,i+k);j++)if(j!==i&&isW(toks[j]))o.push(toks[j]);return o}
+function meanVecs(toks){
+  const need=new Set(toks.filter(isW)),corpus=tok($('ctx').value).concat(toks),freq={};
+  corpus.forEach(w=>freq[w]=(freq[w]||0)+1);
+  const cols=Object.keys(freq).filter(isW).sort((a,b)=>freq[b]-freq[a]).slice(0,300),colSet=new Set(cols);
+  const co={};need.forEach(w=>co[w]={});
+  corpus.forEach((w,i)=>{if(!need.has(w))return;neighbours(corpus,i).forEach(n=>{if(colSet.has(n))co[w][n]=(co[w][n]||0)+1})});
+  const N=corpus.length,m={};
+  need.forEach(w=>{
+    const v=Array(D).fill(0);
+    for(const c in co[w]){const p=Math.log(co[w][c]*N/(freq[w]*freq[c]*4));if(p>0)add(v,rv(c),p)}
+    m[w]=norm(v);
+  });
+  return m;
+}
+function quickVecs(toks){
+  const m={},ws=toks.filter(isW);
+  [...new Set(ws)].forEach(w=>m[w]=rv(w).slice());
+  const base={};for(const w in m)base[w]=m[w].slice();
+  toks.forEach((w,i)=>{if(isW(w))neighbours(toks,i).forEach(n=>add(m[w],base[n],.5))});
+  for(const w in m)m[w]=norm(m[w]);
+  return m;
+}
+function pca3(X){
+  const n=X.length,m=Array(D).fill(0);
+  X.forEach(v=>v.forEach((x,i)=>m[i]+=x/n));
+  const C=X.map(v=>v.map((x,i)=>x-m[i]));
+  const cov=Array.from({length:D},()=>Array(D).fill(0));
+  C.forEach(v=>{for(let i=0;i<D;i++)for(let j=0;j<D;j++)cov[i][j]+=v[i]*v[j]});
+  const comps=[];
+  for(let k=0;k<3;k++){
+    let w=Array.from({length:D},(_,i)=>Math.sin(i*7+k+1));
+    for(let it=0;it<60;it++){const nw=cov.map(r=>r.reduce((s,x,i)=>s+x*w[i],0)),nr=Math.hypot(...nw)||1;w=nw.map(x=>x/nr)}
+    comps.push(w);
+    const cw=cov.map(r=>r.reduce((s,x,i)=>s+x*w[i],0)),lam=cw.reduce((s,x,i)=>s+x*w[i],0);
+    for(let i=0;i<D;i++)for(let j=0;j<D;j++)cov[i][j]-=lam*w[i]*w[j];
+  }
+  const P=C.map(v=>comps.map(c=>c.reduce((s,x,i)=>s+x*v[i],0)));
+  const sc=Math.max(...P.flat().map(Math.abs))||1;
+  return P.map(p=>p.map(x=>x/sc*3));
+}
+const seg=id=>{const g=$(id);g.onclick=e=>{const b=e.target.closest('button');if(!b)return;[...g.children].forEach(c=>c.classList.toggle('on',c===b));upd()}};
+const val=id=>$(id).querySelector('.on').dataset.v;
+function upd(){
+  $('mRow').hidden=val('gBase')!=='mean';
+  const t=val('gType')==='static'?"Static: each word gets one fixed vector, wherever it appears.":"Contextual: every occurrence gets its own vector, shaped by the words around it.";
+  const b=val('gBase')==='spell'?"Spelling-based: words with similar letters land close together.":(val('gMeth')==='learn'?"Meaning-based (learned): words used in similar company land close together. Works best with more text.":"Meaning-based (quick): a fast approximation that groups words by their neighbours. Not real meaning.");
+  $('explain').textContent=t+" "+b;
+}
+function embed(){
+  let toks=tok($('ectx').value);
+  if(!toks.length)toks=tok($('ctx').value);
+  toks=toks.slice(0,150);
+  if(!toks.filter(isW).length){$('pnote').textContent="Paste some text to embed first.";return}
+  const uniq=[...new Set(toks.filter(isW))];
+  let st={};
+  if(val('gBase')==='spell')uniq.forEach(w=>st[w]=spellVec(w));
+  else st=val('gMeth')==='learn'?meanVecs(toks):quickVecs(toks);
+  let pts=[];
+  if(val('gType')==='static')pts=uniq.map(w=>({w,v:st[w]}));
+  else toks.forEach((w,i)=>{if(!isW(w))return;const nb=neighbours(toks,i),v=st[w].map(x=>x*.55);
+    nb.forEach(n=>add(v,st[n],.45/nb.length));pts.push({w,v})});
+  const P=pca3(pts.map(p=>p.v));
+  draw(pts.map((p,i)=>({w:p.w,p:P[i]})));
+  $('pnote').textContent=pts.length+" point(s). Drag to rotate · scroll to zoom · drag the bottom-right corner to resize."+(val('gType')==='ctx'?" Same word, different spots = context at work.":"");
+}
+
+/* ---------- Three.js scene ---------- */
+let R,S,Cam,grp,theta=.7,phi=.35,rad=9,auto=true;
+const COL=[0x1e63e9,0xe53935,0xf2a900],CSS=['#1e63e9','#e53935','#b97e00'];
+function initThree(){
+  const el=$('stage');
+  try{R=new THREE.WebGLRenderer({antialias:true,alpha:true})}catch(e){el.textContent="Your browser can’t show 3D here.";return}
+  el.appendChild(R.domElement);
+  S=new THREE.Scene();Cam=new THREE.PerspectiveCamera(50,1,.1,100);
+  S.add(new THREE.AmbientLight(0xffffff,.75));
+  const dl=new THREE.DirectionalLight(0xffffff,.6);dl.position.set(3,5,4);S.add(dl);
+  S.add(new THREE.GridHelper(7,14,0xcfd5e2,0xe4e7ee));
+  [[0xe53935,[3.6,0,0]],[0xf2a900,[0,3.6,0]],[0x1e63e9,[0,0,3.6]]].forEach(([c,p])=>{
+    const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(...p)]);
+    S.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:c})));
+  });
+  grp=new THREE.Group();S.add(grp);
+  const fit=()=>{const w=el.clientWidth,h=el.clientHeight;R.setSize(w,h,false);Cam.aspect=w/h;Cam.updateProjectionMatrix()};
+  new ResizeObserver(fit).observe(el);fit();
+  let drag=null;
+  el.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY];auto=false;el.setPointerCapture(e.pointerId);el.style.cursor='grabbing'});
+  el.addEventListener('pointermove',e=>{if(!drag)return;theta-=(e.clientX-drag[0])*.01;phi=Math.max(-1.4,Math.min(1.4,phi+(e.clientY-drag[1])*.01));drag=[e.clientX,e.clientY]});
+  el.addEventListener('pointerup',()=>{drag=null;el.style.cursor='grab'});
+  el.addEventListener('wheel',e=>{e.preventDefault();rad=Math.max(3,Math.min(22,rad*(1+e.deltaY*.001)))},{passive:false});
+  (function loop(){
+    requestAnimationFrame(loop);
+    if(auto)theta+=.003;
+    Cam.position.set(rad*Math.cos(phi)*Math.sin(theta),rad*Math.sin(phi),rad*Math.cos(phi)*Math.cos(theta));
+    Cam.lookAt(0,0,0);R.render(S,Cam);
+  })();
+}
+function label(txt,col){
+  const c=document.createElement('canvas'),x=c.getContext('2d'),f='600 34px system-ui,sans-serif';
+  x.font=f;const w=Math.ceil(x.measureText(txt).width)+24;c.width=w;c.height=52;
+  x.font=f;x.fillStyle='rgba(255,255,255,.9)';x.beginPath();x.rect(0,4,w,44);x.fill();
+  x.fillStyle=col;x.textBaseline='middle';x.fillText(txt,12,27);
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),depthTest:false,transparent:true}));
+  s.scale.set(w/52*.32,.32,1);return s;
+}
+function draw(items){
+  if(!grp)return;
+  while(grp.children.length)grp.remove(grp.children[0]);
+  items.forEach(({w,p})=>{
+    const k=hash(w)%3;
+    const m=new THREE.Mesh(new THREE.SphereGeometry(.12,16,12),new THREE.MeshStandardMaterial({color:COL[k]}));
+    m.position.set(p[0],p[1],p[2]);grp.add(m);
+    const l=label(w,CSS[k]);l.position.set(p[0],p[1]+.28,p[2]);grp.add(l);
+  });
+}
+
+/* ---------- wiring ---------- */
+$('bBuild').onclick=build;$('bTok').onclick=tokenise;$('bEmb').onclick=embed;
+$('bEx').onclick=()=>{$('ctx').value=EX;$('ectx').value=EX;$('sent').value="the cats chased a quokka";};
+$('bReset').onclick=()=>{V=null;['ctx','ectx','sent'].forEach(i=>$(i).value='');$('stats').hidden=true;$('chips').innerHTML='';$('vnote').textContent='';if(grp)while(grp.children.length)grp.remove(grp.children[0])};
+$('sent').addEventListener('keydown',e=>{if(e.key==='Enter')tokenise()});
+['gType','gBase','gMeth'].forEach(seg);upd();initThree();
+</script>
+</body></html>
